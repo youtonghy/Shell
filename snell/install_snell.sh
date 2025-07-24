@@ -94,7 +94,7 @@ sudo systemctl daemon-reload
 
 # 启动服务
 echo "启动Snell服务..."
-sudo systemctl start snell
+sudo systemctl restart snell
 
 # 设置开机自启
 echo "设置开机自启..."
