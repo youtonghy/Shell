@@ -36,6 +36,12 @@ if [ ! -f "$FILENAME" ]; then
     exit 1
 fi
 
+# 删除之前的snell-server
+if [ -f "/usr/local/bin/snell-server" ]; then
+    echo "删除之前的snell-server..."
+    sudo rm -f /usr/local/bin/snell-server
+fi
+
 # 使用sudo解压文件到/usr/local/bin
 echo "正在解压文件到 /usr/local/bin..."
 if sudo unzip "$FILENAME" -d /usr/local/bin; then
@@ -66,6 +72,12 @@ sudo chmod 755 /etc/snell
 echo "创建配置文件..."
 echo "使用向导生成Snell配置文件..."
 echo "y" | sudo /usr/local/bin/snell-server --wizard -c /etc/snell/snell-server.conf
+
+# 删除之前的snell.service
+if [ -f "/lib/systemd/system/snell.service" ]; then
+    echo "删除之前的snell.service..."
+    sudo rm -f /lib/systemd/system/snell.service
+fi
 
 # 下载systemd服务文件
 echo "正在下载systemd服务文件..."
