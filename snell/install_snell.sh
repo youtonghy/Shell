@@ -6,6 +6,7 @@ echo "开始下载Snell服务器..."
 # 设置文件名和URL
 FILENAME="snell-server-v5.0.0-linux-amd64.zip"
 URL="https://dl.nssurge.com/snell/snell-server-v5.0.0-linux-amd64.zip"
+SERVICE_URL="https://raw.githubusercontent.com/youtonghy/Shell/refs/heads/main/snell/snell.service"
 
 # 检查wget是否可用
 if ! command -v wget &> /dev/null; then
@@ -55,5 +56,33 @@ else
     echo "警告: 无法删除文件 $FILENAME"
 fi
 
+# 创建配置文件目录
+echo "创建配置文件目录..."
+sudo mkdir -p /etc/snell
+sudo chmod 755 /etc/snell
+
+# 创建配置文件
+echo "创建配置文件..."
+echo "使用向导生成Snell配置文件..."
+echo "y" | sudo /usr/local/bin/snell-server --wizard -c /etc/snell/snell-server.conf
+
+# 下载systemd服务文件
+echo "正在下载systemd服务文件..."
+if sudo wget "$SERVICE_URL" -O /lib/systemd/system/snell.service; then
+    echo "systemd服务文件下载完成"
+else
+    echo "错误: systemd服务文件下载失败"
+    exit 1
+fi
+
+# 重新加载systemd配置
+echo "重新加载systemd配置..."
+sudo systemctl daemon-reload
+
 echo "Snell服务器安装完成！"
-echo "您可以使用以下命令运行: snell-server" 
+echo "您可以使用以下命令管理服务:"
+echo "  启动服务: sudo systemctl start snell"
+echo "  停止服务: sudo systemctl stop snell"
+echo "  开机自启: sudo systemctl enable snell"
+echo "  查看状态: sudo systemctl status snell"
+
