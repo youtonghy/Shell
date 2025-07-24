@@ -7,6 +7,7 @@ echo "开始下载Snell服务器..."
 FILENAME="snell-server-v5.0.0-linux-amd64.zip"
 URL="https://dl.nssurge.com/snell/snell-server-v5.0.0-linux-amd64.zip"
 SERVICE_URL="https://raw.githubusercontent.com/youtonghy/Shell/refs/heads/main/snell/snell.service"
+VERSION="5"
 
 # 检查wget是否可用
 if ! command -v wget &> /dev/null; then
@@ -79,10 +80,67 @@ fi
 echo "重新加载systemd配置..."
 sudo systemctl daemon-reload
 
+# 启动服务
+echo "启动Snell服务..."
+sudo systemctl start snell
+
+# 设置开机自启
+echo "设置开机自启..."
+sudo systemctl enable snell
+
+# 导入Surge
+echo "导入Surge配置..."
+
 echo "Snell服务器安装完成！"
 echo "您可以使用以下命令管理服务:"
 echo "  启动服务: sudo systemctl start snell"
 echo "  停止服务: sudo systemctl stop snell"
 echo "  开机自启: sudo systemctl enable snell"
 echo "  查看状态: sudo systemctl status snell"
+
+# 解析snell配置文件
+CONFIG_FILE="/etc/snell/snell-server.conf"
+if [ -f "$CONFIG_FILE" ]; then
+    # 获取监听地址和端口
+    LISTEN=$(grep "^listen" "$CONFIG_FILE" | cut -d'=' -f2 | tr -d ' ')
+    # 获取PSK密钥
+    PSK=$(grep "^psk" "$CONFIG_FILE" | cut -d'=' -f2 | tr -d ' ')
+    
+    # 提取IP地址和端口
+    if [[ $LISTEN == *":"* ]]; then
+        IFS=':' read -r IP PORT <<< "$LISTEN"
+    else
+        IP="0.0.0.0"
+        PORT="$LISTEN"
+    fi
+    
+    # 如果IP是0.0.0.0，使用curl ip.sb获取公网IP地址
+    if [ "$IP" = "0.0.0.0" ]; then
+        echo "检测到监听地址为0.0.0.0，正在获取公网IP地址..."
+        PUBLIC_IP=$(curl -s ip.sb)
+        if [ -n "$PUBLIC_IP" ]; then
+            IP="$PUBLIC_IP"
+            echo "获取到公网IP地址: $IP"
+        else
+            IP="YOUR_SERVER_IP"
+            echo "警告: 无法获取公网IP地址，请手动替换YOUR_SERVER_IP"
+        fi
+    fi
+    
+    # 输出Surge格式配置
+    echo ""
+    echo "==== Surge配置格式 ===="
+    echo "Snell V5 = snell, $IP, $PORT, psk=$PSK, version=$VERSION"
+    echo "========================"
+    echo ""
+    echo "请将上述配置添加到您的Surge配置文件中"
+    if [ "$IP" = "YOUR_SERVER_IP" ]; then
+        echo "注意: 请将YOUR_SERVER_IP替换为您的实际服务器IP地址"
+    fi
+else
+    echo "错误: 配置文件 $CONFIG_FILE 不存在"
+fi
+
+
+
 
