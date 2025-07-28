@@ -3,11 +3,41 @@
 # Snell服务器安装脚本
 echo "开始下载Snell服务器..."
 
+# 检测系统架构
+ARCH=$(uname -m)
+echo "检测到系统架构: $ARCH"
+
+# 根据架构设置下载URL和文件名
+case $ARCH in
+    x86_64|amd64)
+        ARCH_SUFFIX="amd64"
+        ;;
+    armv7l|arm)
+        ARCH_SUFFIX="armv7l"
+        ;;
+    aarch64|arm64)
+        ARCH_SUFFIX="aarch64"
+        ;;
+    i386|i686)
+        ARCH_SUFFIX="i386"
+        ;;
+    *)
+        echo "错误: 不支持的系统架构 $ARCH"
+        echo "支持的架构: x86_64/amd64, armv7l/arm, aarch64/arm64, i386/i686"
+        exit 1
+        ;;
+esac
+
+echo "使用架构后缀: $ARCH_SUFFIX"
+
 # 设置文件名和URL
-FILENAME="snell-server-v5.0.0-linux-amd64.zip"
-URL="https://dl.nssurge.com/snell/snell-server-v5.0.0-linux-amd64.zip"
+FILENAME="snell-server-v5.0.0-linux-${ARCH_SUFFIX}.zip"
+URL="https://dl.nssurge.com/snell/snell-server-v5.0.0-linux-${ARCH_SUFFIX}.zip"
 SERVICE_URL="https://raw.githubusercontent.com/youtonghy/Shell/refs/heads/main/snell/snell.service"
 VERSION="5"
+
+echo "下载文件: $FILENAME"
+echo "下载地址: $URL"
 
 # 检查wget是否可用
 if ! command -v wget &> /dev/null; then
