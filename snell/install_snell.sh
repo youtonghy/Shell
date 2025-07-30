@@ -179,7 +179,7 @@ if [ -f "$CONFIG_FILE" ]; then
     # 如果IP是0.0.0.0，使用curl ip.sb获取公网IP地址
     if [ "$IP" = "0.0.0.0" ]; then
         echo "检测到监听地址为0.0.0.0，正在获取公网IP地址..."
-        PUBLIC_IP=$(curl -s ip.sb)
+        PUBLIC_IP=$(curl -s -4 ip.sb)
         if [ -n "$PUBLIC_IP" ]; then
             IP="$PUBLIC_IP"
             echo "获取到公网IP地址: $IP"
