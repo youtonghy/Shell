@@ -192,7 +192,7 @@ if [ -f "$CONFIG_FILE" ]; then
     # 输出Surge格式配置
     echo ""
     echo "==== Surge配置格式 ===="
-    echo "Snell V5 = snell, $IP, $PORT, psk=$PSK, version=$VERSION"
+    echo "Snell V$VERSION = snell, $IP, $PORT, psk=$PSK, version=$VERSION"
     echo "========================"
     echo ""
     echo "请将上述配置添加到您的Surge配置文件中"
