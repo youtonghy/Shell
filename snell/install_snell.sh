@@ -61,14 +61,26 @@ echo "下载地址: $URL"
 
 # 检查wget是否可用
 if ! command -v wget &> /dev/null; then
-    echo "错误: wget未安装。请先安装wget。"
-    exit 1
+    echo "wget未安装，正在自动安装..."
+    sudo apt update && sudo apt install -y wget
+    if ! command -v wget &> /dev/null; then
+        echo "错误: wget安装失败。请手动安装wget。"
+        exit 1
+    else
+        echo "wget安装成功"
+    fi
 fi
 
 # 检查unzip是否可用
 if ! command -v unzip &> /dev/null; then
-    echo "错误: unzip未安装。请先安装unzip。"
-    exit 1
+    echo "unzip未安装，正在自动安装..."
+    sudo apt update && sudo apt install -y unzip
+    if ! command -v unzip &> /dev/null; then
+        echo "错误: unzip安装失败。请手动安装unzip。"
+        exit 1
+    else
+        echo "unzip安装成功"
+    fi
 fi
 
 # 下载文件
