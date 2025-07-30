@@ -30,11 +30,31 @@ esac
 
 echo "使用架构后缀: $ARCH_SUFFIX"
 
+# 设置默认版本号
+DEFAULT_VERSION="5.0.0"
+DEFAULT_VERSION_SHORT="5"
+
+# 询问用户输入版本号
+echo ""
+echo "请输入Snell服务器版本号 (默认: $DEFAULT_VERSION):"
+read -p "版本号: " USER_VERSION
+
+# 如果用户输入为空，使用默认版本号
+if [ -z "$USER_VERSION" ]; then
+    SNELL_VERSION="$DEFAULT_VERSION"
+    VERSION="$DEFAULT_VERSION_SHORT"
+    echo "使用默认版本号: $SNELL_VERSION"
+else
+    SNELL_VERSION="$USER_VERSION"
+    # 提取主版本号（如5.0.0 -> 5）
+    VERSION=$(echo "$SNELL_VERSION" | cut -d'.' -f1)
+    echo "使用指定版本号: $SNELL_VERSION"
+fi
+
 # 设置文件名和URL
-FILENAME="snell-server-v5.0.0-linux-${ARCH_SUFFIX}.zip"
-URL="https://dl.nssurge.com/snell/snell-server-v5.0.0-linux-${ARCH_SUFFIX}.zip"
+FILENAME="snell-server-v${SNELL_VERSION}-linux-${ARCH_SUFFIX}.zip"
+URL="https://dl.nssurge.com/snell/snell-server-v${SNELL_VERSION}-linux-${ARCH_SUFFIX}.zip"
 SERVICE_URL="https://raw.githubusercontent.com/youtonghy/Shell/refs/heads/main/snell/snell.service"
-VERSION="5"
 
 echo "下载文件: $FILENAME"
 echo "下载地址: $URL"
