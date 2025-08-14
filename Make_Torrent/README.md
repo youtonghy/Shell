@@ -11,6 +11,13 @@ Usage:
 ./Make_torrent.sh /path/to/file_or_directory
 ```
 
+Alternatively, fetch the script with `curl` and run it:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/youtonghy/Shell/refs/heads/main/Make_Torrent/Make_torrent.sh -o Make_torrent.sh
+bash Make_torrent.sh /path/to/file_or_directory
+```
+
 The script invokes:
 
 ```bash
