@@ -1,37 +1,78 @@
+# Photo_Collection 脚本说明
 
-This directory stores photo collection files.
+`ph_cl.sh` 是一个用于批量下载与解压的 Bash 脚本：
 
-# Photo Collection
+- 从链接列表文件逐行读取 URL，并发下载到目标目录（默认并发 4）。
+- 终端显示“每个文件一行”的进度，并原位刷新，而不是不断换行刷屏。
+- 下载前会先对目标目录中已存在的压缩包进行一次解压；下载全部完成后再解压一次。
+- 解压成功后自动删除压缩包文件（ZIP/RAR）。
+- 自动忽略 unzip/unrar 的非致命告警（如文件名编码不一致），不中断脚本。
+- 若目标文件已存在，则跳过下载。
 
-This directory stores photo archives downloaded via `ph_cl.sh`.
+## 依赖
 
-## Usage
+- `wget`（下载）
+- `unzip`（解压 ZIP）
+- `unrar` 或 `unrar-free`（解压 RAR）
 
-1. Prepare a text file where each line is a direct download link.
+脚本会尝试使用常见包管理器自动安装缺失依赖；若失败请手动安装。
 
-2. Run the script from this directory, passing the list file and a target folder name:
-   ```bash
-   bash ph_cl.sh urls.txt MyAlbum
-   ```
-   The script downloads each file into `MyAlbum` and extracts any ZIP or RAR archives.
+## 使用方法
 
+1) 给予脚本执行权限：
 
-If an archive unpacks files directly, the script creates a folder named after the archive to keep things tidy.
+- `chmod +x ph_cl.sh`
 
-The script can also be accessed directly at:
-```
-https://raw.githubusercontent.com/youtonghy/Shell/refs/heads/main/Photo_Collection/ph_cl.sh
-```
-You can fetch it with `curl -O` or `wget` if you do not want to clone the repository.
+2) 准备一个链接列表文件（例如 `links.txt`，每行一个 URL，支持空行和 `#` 注释行）：
 
+- 示例 `links.txt` 内容：
+  - `https://example.com/file1.zip`
+  - `https://example.com/file2.rar`
+  - `# 这是一行注释`
 
-2. Run the script, specifying that file and a target directory name:
-   ```bash
-   bash ../ph_cl.sh urls.txt Photo_Collection
-   ```
-   The script downloads each file into the directory and extracts any ZIP or RAR archives.
+3) 运行脚本：
 
+- `./ph_cl.sh links.txt 输出目录`
 
-If an archive unpacks files directly, the script creates a folder named after the archive to keep things tidy.
+脚本会：
 
+- 在终端原位显示每个文件的下载进度（需要在交互式终端下运行）。
+- 先解压输出目录中已存在的压缩包，然后开始并发下载；全部下载完成后再次解压新下载的压缩包。
+- 解压成功后删除对应压缩包。
+
+## 进度显示
+
+- 每个正在下载的文件只占一行，按固定间隔原位刷新百分比。
+- 如果输出被重定向到文件/管道，进度监视器会自动跳过（不显示动态进度）。
+
+## 行为细节
+
+- 并发下载数：在脚本中由变量 `max_jobs=4` 控制，可自行修改。
+- 已存在文件：若目标文件已存在，则跳过下载。
+- 文件名：脚本会尽力从响应头或 URL 中推断文件名，并做基础的特殊字符清理。
+- 解压位置：
+  - 若压缩包根目录直接包含文件，则解压到 `输出目录/<压缩包名去扩展名>/`；
+  - 否则解压到 `输出目录/`。
+- 删除压缩包：解压成功后会删除源压缩包，以节省空间。
+- 非致命告警：`unzip`/`unrar` 的警告（例如“continuing with central filename version”、“mismatching local filename”）会被抑制且不导致脚本退出；发生致命错误时才会打印错误并跳过该压缩包。
+
+## 常见问题
+
+- 终端没有动态进度？
+  - 请在交互式终端中运行脚本；如果将输出重定向到文件，动态进度会被关闭。
+
+- ZIP 中文件名乱码？
+  - 部分 Windows/GBK 压缩包可能存在文件名编码问题。脚本已忽略非致命告警，通常不影响解压结果；如需更精细的编码处理，可根据环境在调用 `unzip` 时增加 `-O <charset>`（需要修改脚本）。
+
+- 依赖安装失败？
+  - 请使用系统的包管理器手动安装 `wget`、`unzip`、`unrar`（或 `unrar-free`）。
+
+## 提示
+
+- 你可以根据需要调整并发数 `max_jobs` 与进度刷新间隔（在脚本中搜索 `sleep 0.5`）。
+- 若希望“下载完成立刻解压”（并行解压），可扩展脚本在单个下载完成后触发解压；当前实现是批量解压（下载前/后各一次）。
+
+## 许可
+
+- 本仓库未附加许可证，如需分发或修改请与作者确认。
 
