@@ -1,3 +1,5 @@
+This directory stores photo collection files.
+=======
 # Photo Collection
 
 This directory stores photo archives downloaded via `ph_cl.sh`.
