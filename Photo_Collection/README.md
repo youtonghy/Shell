@@ -1,4 +1,6 @@
+
 This directory stores photo collection files.
+
 # Photo Collection
 
 This directory stores photo archives downloaded via `ph_cl.sh`.
@@ -22,6 +24,7 @@ https://raw.githubusercontent.com/youtonghy/Shell/refs/heads/main/Photo_Collecti
 ```
 You can fetch it with `curl -O` or `wget` if you do not want to clone the repository.
 
+
 2. Run the script, specifying that file and a target directory name:
    ```bash
    bash ../ph_cl.sh urls.txt Photo_Collection
@@ -30,4 +33,5 @@ You can fetch it with `curl -O` or `wget` if you do not want to clone the reposi
 
 
 If an archive unpacks files directly, the script creates a folder named after the archive to keep things tidy.
+
 

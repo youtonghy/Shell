@@ -9,10 +9,29 @@ fi
 link_file="$1"
 output_dir="$2"
 
+
+echo "Link file: $link_file"
+echo "Output directory: $output_dir"
+
+
 if [ ! -f "$link_file" ]; then
   echo "Link file not found: $link_file" >&2
   exit 1
 fi
+
+
+echo "Creating directory $output_dir"
+mkdir -p "$output_dir"
+
+echo "Starting downloads"
+while IFS= read -r url; do
+  [ -z "$url" ] && continue
+  echo "Downloading $url"
+  wget -P "$output_dir" "$url"
+done < "$link_file"
+echo "Download step complete"
+
+echo "Checking archive tools"
 
 mkdir -p "$output_dir"
 
@@ -27,6 +46,48 @@ packages=()
 command -v unzip >/dev/null 2>&1 || packages+=(unzip)
 command -v unrar >/dev/null 2>&1 || packages+=(unrar)
 if [ ${#packages[@]} -gt 0 ]; then
+
+  echo "Installing missing packages: ${packages[*]}"
+  apt-get update
+  apt-get install -y "${packages[@]}"
+else
+  echo "All archive tools already installed"
+fi
+
+echo "Beginning extraction"
+shopt -s nullglob
+for file in "$output_dir"/*; do
+  base="$(basename "$file")"
+  if [[ "$base" == *zip* ]]; then
+    name="${base%.*}"
+    echo "Extracting $base with unzip"
+    tmp_dir="$(mktemp -d)"
+    unzip -q "$file" -d "$tmp_dir"
+  elif [[ "$base" == *rar* ]]; then
+    name="${base%.*}"
+    echo "Extracting $base with unrar"
+    tmp_dir="$(mktemp -d)"
+    unrar x -y "$file" "$tmp_dir/"
+  else
+    echo "Skipping $base (no zip or rar in name)"
+    continue
+  fi
+
+  shopt -s dotglob
+  contents=("$tmp_dir"/*)
+  if [ ${#contents[@]} -eq 1 ] && [ -d "${contents[0]}" ]; then
+    echo "Moving extracted folder for $base"
+    mv "${contents[0]}" "$output_dir/"
+  else
+    echo "Creating directory $output_dir/$name"
+    mkdir -p "$output_dir/$name"
+    mv "$tmp_dir"/* "$output_dir/$name/"
+  fi
+  rm -r "$tmp_dir"
+  echo "Finished extracting $base"
+done
+echo "Extraction step complete"
+
   apt-get update
   apt-get install -y "${packages[@]}"
 fi
@@ -55,4 +116,5 @@ for file in "$output_dir"/*; do
       ;;
   esac
 done
+
 
