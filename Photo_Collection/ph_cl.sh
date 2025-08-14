@@ -9,13 +9,16 @@ fi
 link_file="$1"
 output_dir="$2"
 
+
 echo "Link file: $link_file"
 echo "Output directory: $output_dir"
+
 
 if [ ! -f "$link_file" ]; then
   echo "Link file not found: $link_file" >&2
   exit 1
 fi
+
 
 echo "Creating directory $output_dir"
 mkdir -p "$output_dir"
@@ -29,10 +32,21 @@ done < "$link_file"
 echo "Download step complete"
 
 echo "Checking archive tools"
+
+mkdir -p "$output_dir"
+
+# download each link
+while IFS= read -r url; do
+  [ -z "$url" ] && continue
+  wget -P "$output_dir" "$url"
+done < "$link_file"
+
+# ensure unzip/unrar installed
 packages=()
 command -v unzip >/dev/null 2>&1 || packages+=(unzip)
 command -v unrar >/dev/null 2>&1 || packages+=(unrar)
 if [ ${#packages[@]} -gt 0 ]; then
+
   echo "Installing missing packages: ${packages[*]}"
   apt-get update
   apt-get install -y "${packages[@]}"
@@ -73,4 +87,34 @@ for file in "$output_dir"/*; do
   echo "Finished extracting $base"
 done
 echo "Extraction step complete"
+
+  apt-get update
+  apt-get install -y "${packages[@]}"
+fi
+
+shopt -s nullglob
+for file in "$output_dir"/*; do
+  case "$file" in
+    *.zip|*.rar)
+      base="$(basename "$file")"
+      name="${base%.*}"
+      tmp_dir="$(mktemp -d)"
+      if [[ "$file" == *.zip ]]; then
+        unzip -q "$file" -d "$tmp_dir"
+      else
+        unrar x -y "$file" "$tmp_dir/"
+      fi
+      shopt -s dotglob
+      contents=("$tmp_dir"/*)
+      if [ ${#contents[@]} -eq 1 ] && [ -d "${contents[0]}" ]; then
+        mv "${contents[0]}" "$output_dir/"
+      else
+        mkdir -p "$output_dir/$name"
+        mv "$tmp_dir"/* "$output_dir/$name/"
+      fi
+      rm -r "$tmp_dir"
+      ;;
+  esac
+done
+
 
