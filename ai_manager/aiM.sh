@@ -27,6 +27,28 @@ pause() {
   read -r -p "按回车继续..." _
 }
 
+prompt_profile_name() {
+  local label=$1
+  local name
+  while :; do
+    name=$(prompt "为当前${label}配置输入一个名称（仅字母数字、下划线、短横线；输入0取消）：")
+    name=${name// /}
+    if [[ "$name" == "0" ]]; then
+      return 1
+    fi
+    if [[ -z "$name" ]]; then
+      echo "名称不能为空。"
+      continue
+    fi
+    if [[ "$name" =~ [^a-zA-Z0-9_-] ]]; then
+      echo "名称只能包含字母、数字、下划线或短横线。"
+      continue
+    fi
+    printf '%s\n' "$name"
+    return 0
+  done
+}
+
 ensure_codex_dirs() {
   mkdir -p "$AIM_DIR"
 }
@@ -49,19 +71,11 @@ save_codex_profile() {
   fi
 
   local name
-  while :; do
-    name=$(prompt "为当前配置输入一个名称（仅字母数字、下划线、短横线）：")
-    name=${name// /}
-    if [[ -z "$name" ]]; then
-      echo "名称不能为空。"
-      continue
-    fi
-    if [[ "$name" =~ [^a-zA-Z0-9_-] ]]; then
-      echo "名称只能包含字母、数字、下划线或短横线。"
-      continue
-    fi
-    break
-  done
+  if ! name=$(prompt_profile_name "Codex"); then
+    echo "已取消保存。"
+    pause
+    return
+  fi
 
   local target_dir="${AIM_DIR}/${name}"
   if [ -e "$target_dir" ]; then
@@ -105,10 +119,13 @@ switch_codex_profile() {
 
   local selection
   while :; do
-    selection=$(prompt "输入要切换的配置编号：")
+    selection=$(prompt "输入要切换的配置编号（输入0返回）：")
     if [[ ! "$selection" =~ ^[0-9]+$ ]]; then
       echo "请输入有效编号。"
       continue
+    fi
+    if (( selection == 0 )); then
+      return
     fi
     if (( selection < 1 || selection > ${#choices[@]} )); then
       echo "编号超出范围，请重试。"
@@ -131,6 +148,114 @@ switch_codex_profile() {
   pause
 }
 
+update_codex_model() {
+  ensure_codex_dirs
+
+  local choices=()
+  for dir in "$AIM_DIR"/*; do
+    [ -d "$dir" ] || continue
+    choices+=("$(basename "$dir")")
+  done
+
+  if [ ${#choices[@]} -eq 0 ]; then
+    echo "暂无已保存的配置。"
+    pause
+    return
+  fi
+
+  local new_model
+  new_model=$(prompt "请输入新的模型名称（如 gpt-5.2-codex，输入0取消）：")
+  new_model=${new_model// /}
+  if [[ "$new_model" == "0" || -z "$new_model" ]]; then
+    echo "已取消更新。"
+    pause
+    return
+  fi
+
+  echo "将更新以下配置中的模型为：$new_model"
+  for name in "${choices[@]}"; do
+    echo "  - $name"
+  done
+
+  local confirm
+  confirm=$(prompt "确认更新所有配置？(y/N)：")
+  if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    echo "已取消更新。"
+    pause
+    return
+  fi
+
+  local updated=0
+  for name in "${choices[@]}"; do
+    local config_file="${AIM_DIR}/${name}/config.toml"
+    if [ -f "$config_file" ]; then
+      if sed -i "s/^model = \".*\"/model = \"${new_model}\"/" "$config_file"; then
+        echo "已更新：$name"
+        updated=$((updated + 1))
+      else
+        echo "更新失败：$name"
+      fi
+    fi
+  done
+
+  echo "共更新 ${updated} 个配置。"
+  pause
+}
+
+delete_codex_profile() {
+  ensure_codex_dirs
+
+  local choices=()
+  for dir in "$AIM_DIR"/*; do
+    [ -d "$dir" ] || continue
+    choices+=("$(basename "$dir")")
+  done
+
+  if [ ${#choices[@]} -eq 0 ]; then
+    echo "暂无可删除的配置。"
+    pause
+    return
+  fi
+
+  echo "可删除的配置："
+  local idx=1
+  for name in "${choices[@]}"; do
+    echo "  ${idx}) ${name}"
+    idx=$((idx + 1))
+  done
+
+  local selection
+  while :; do
+    selection=$(prompt "输入要删除的配置编号（输入0返回）：")
+    if [[ ! "$selection" =~ ^[0-9]+$ ]]; then
+      echo "请输入有效编号。"
+      continue
+    fi
+    if (( selection == 0 )); then
+      return
+    fi
+    if (( selection < 1 || selection > ${#choices[@]} )); then
+      echo "编号超出范围，请重试。"
+      continue
+    fi
+    break
+  done
+
+  local chosen="${choices[$((selection - 1))]}"
+  local target_dir="${AIM_DIR}/${chosen}"
+  local confirm
+  confirm=$(prompt "确认删除配置「${chosen}」？此操作不可恢复。(y/N)：")
+  if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    echo "已取消删除。"
+    pause
+    return
+  fi
+
+  rm -rf -- "$target_dir"
+  echo "已删除配置：$chosen"
+  pause
+}
+
 save_claude_profile() {
   ensure_claude_dirs
 
@@ -141,19 +266,11 @@ save_claude_profile() {
   fi
 
   local name
-  while :; do
-    name=$(prompt "为当前Claude配置输入一个名称（仅字母数字、下划线、短横线）：")
-    name=${name// /}
-    if [[ -z "$name" ]]; then
-      echo "名称不能为空。"
-      continue
-    fi
-    if [[ "$name" =~ [^a-zA-Z0-9_-] ]]; then
-      echo "名称只能包含字母、数字、下划线或短横线。"
-      continue
-    fi
-    break
-  done
+  if ! name=$(prompt_profile_name "Claude"); then
+    echo "已取消保存。"
+    pause
+    return
+  fi
 
   local target_dir="${CLAUDE_AIM_DIR}/${name}"
   if [ -e "$target_dir" ]; then
@@ -197,10 +314,13 @@ switch_claude_profile() {
 
   local selection
   while :; do
-    selection=$(prompt "输入要切换的配置编号：")
+    selection=$(prompt "输入要切换的配置编号（输入0返回）：")
     if [[ ! "$selection" =~ ^[0-9]+$ ]]; then
       echo "请输入有效编号。"
       continue
+    fi
+    if (( selection == 0 )); then
+      return
     fi
     if (( selection < 1 || selection > ${#choices[@]} )); then
       echo "编号超出范围，请重试。"
@@ -223,6 +343,60 @@ switch_claude_profile() {
   pause
 }
 
+delete_claude_profile() {
+  ensure_claude_dirs
+
+  local choices=()
+  for dir in "$CLAUDE_AIM_DIR"/*; do
+    [ -d "$dir" ] || continue
+    choices+=("$(basename "$dir")")
+  done
+
+  if [ ${#choices[@]} -eq 0 ]; then
+    echo "暂无可删除的配置。"
+    pause
+    return
+  fi
+
+  echo "可删除的配置："
+  local idx=1
+  for name in "${choices[@]}"; do
+    echo "  ${idx}) ${name}"
+    idx=$((idx + 1))
+  done
+
+  local selection
+  while :; do
+    selection=$(prompt "输入要删除的配置编号（输入0返回）：")
+    if [[ ! "$selection" =~ ^[0-9]+$ ]]; then
+      echo "请输入有效编号。"
+      continue
+    fi
+    if (( selection == 0 )); then
+      return
+    fi
+    if (( selection < 1 || selection > ${#choices[@]} )); then
+      echo "编号超出范围，请重试。"
+      continue
+    fi
+    break
+  done
+
+  local chosen="${choices[$((selection - 1))]}"
+  local target_dir="${CLAUDE_AIM_DIR}/${chosen}"
+  local confirm
+  confirm=$(prompt "确认删除配置「${chosen}」？此操作不可恢复。(y/N)：")
+  if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    echo "已取消删除。"
+    pause
+    return
+  fi
+
+  rm -rf -- "$target_dir"
+  echo "已删除配置：$chosen"
+  pause
+}
+
 save_gemini_profile() {
   ensure_gemini_dirs
 
@@ -240,19 +414,11 @@ save_gemini_profile() {
   fi
 
   local name
-  while :; do
-    name=$(prompt "为当前Gemini配置输入一个名称（仅字母数字、下划线、短横线）：")
-    name=${name// /}
-    if [[ -z "$name" ]]; then
-      echo "名称不能为空。"
-      continue
-    fi
-    if [[ "$name" =~ [^a-zA-Z0-9_-] ]]; then
-      echo "名称只能包含字母、数字、下划线或短横线。"
-      continue
-    fi
-    break
-  done
+  if ! name=$(prompt_profile_name "Gemini"); then
+    echo "已取消保存。"
+    pause
+    return
+  fi
 
   local target_dir="${GEMINI_AIM_DIR}/${name}"
   if [ -e "$target_dir" ]; then
@@ -297,10 +463,13 @@ switch_gemini_profile() {
 
   local selection
   while :; do
-    selection=$(prompt "输入要切换的配置编号：")
+    selection=$(prompt "输入要切换的配置编号（输入0返回）：")
     if [[ ! "$selection" =~ ^[0-9]+$ ]]; then
       echo "请输入有效编号。"
       continue
+    fi
+    if (( selection == 0 )); then
+      return
     fi
     if (( selection < 1 || selection > ${#choices[@]} )); then
       echo "编号超出范围，请重试。"
@@ -330,6 +499,60 @@ switch_gemini_profile() {
   pause
 }
 
+delete_gemini_profile() {
+  ensure_gemini_dirs
+
+  local choices=()
+  for dir in "$GEMINI_AIM_DIR"/*; do
+    [ -d "$dir" ] || continue
+    choices+=("$(basename "$dir")")
+  done
+
+  if [ ${#choices[@]} -eq 0 ]; then
+    echo "暂无可删除的配置。"
+    pause
+    return
+  fi
+
+  echo "可删除的配置："
+  local idx=1
+  for name in "${choices[@]}"; do
+    echo "  ${idx}) ${name}"
+    idx=$((idx + 1))
+  done
+
+  local selection
+  while :; do
+    selection=$(prompt "输入要删除的配置编号（输入0返回）：")
+    if [[ ! "$selection" =~ ^[0-9]+$ ]]; then
+      echo "请输入有效编号。"
+      continue
+    fi
+    if (( selection == 0 )); then
+      return
+    fi
+    if (( selection < 1 || selection > ${#choices[@]} )); then
+      echo "编号超出范围，请重试。"
+      continue
+    fi
+    break
+  done
+
+  local chosen="${choices[$((selection - 1))]}"
+  local target_dir="${GEMINI_AIM_DIR}/${chosen}"
+  local confirm
+  confirm=$(prompt "确认删除配置「${chosen}」？此操作不可恢复。(y/N)：")
+  if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    echo "已取消删除。"
+    pause
+    return
+  fi
+
+  rm -rf -- "$target_dir"
+  echo "已删除配置：$chosen"
+  pause
+}
+
 gemini_menu() {
   ensure_gemini_dirs
   while true; do
@@ -337,12 +560,14 @@ gemini_menu() {
     echo "== Gemini CLI 配置管理 =="
     echo "1) 保存当前配置为新配置"
     echo "2) 切换到已保存的配置"
-    echo "3) 返回主菜单"
+    echo "3) 删除已保存的配置"
+    echo "0) 返回主菜单"
     choice=$(prompt "请选择：")
     case "$choice" in
       1) save_gemini_profile ;;
       2) switch_gemini_profile ;;
-      3) return ;;
+      3) delete_gemini_profile ;;
+      0) return ;;
       *) echo "无效选项。" ; pause ;;
     esac
   done
@@ -355,12 +580,14 @@ claude_menu() {
     echo "== Claude Code 配置管理 =="
     echo "1) 保存当前配置为新配置"
     echo "2) 切换到已保存的配置"
-    echo "3) 返回主菜单"
+    echo "3) 删除已保存的配置"
+    echo "0) 返回主菜单"
     choice=$(prompt "请选择：")
     case "$choice" in
       1) save_claude_profile ;;
       2) switch_claude_profile ;;
-      3) return ;;
+      3) delete_claude_profile ;;
+      0) return ;;
       *) echo "无效选项。" ; pause ;;
     esac
   done
@@ -373,12 +600,16 @@ codex_menu() {
     echo "== Codex 配置管理 =="
     echo "1) 保存当前配置为新配置"
     echo "2) 切换到已保存的配置"
-    echo "3) 返回主菜单"
+    echo "3) 删除已保存的配置"
+    echo "4) 批量更新模型名称"
+    echo "0) 返回主菜单"
     choice=$(prompt "请选择：")
     case "$choice" in
       1) save_codex_profile ;;
       2) switch_codex_profile ;;
-      3) return ;;
+      3) delete_codex_profile ;;
+      4) update_codex_model ;;
+      0) return ;;
       *) echo "无效选项。" ; pause ;;
     esac
   done
@@ -391,13 +622,13 @@ main_menu() {
     echo "1) Codex"
     echo "2) Claude Code"
     echo "3) Gemini CLI"
-    echo "4) 退出"
+    echo "0) 退出"
     choice=$(prompt "请选择：")
     case "$choice" in
       1) codex_menu ;;
       2) claude_menu ;;
       3) gemini_menu ;;
-      4) echo "已退出。" ; exit 0 ;;
+      0) echo "已退出。" ; exit 0 ;;
       *) echo "无效选项。" ; pause ;;
     esac
   done
