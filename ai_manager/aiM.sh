@@ -387,36 +387,120 @@ codex_write_auth_from_provider() {
   } > "$CODEX_AUTH"
 }
 
-codex_write_config_from_provider() {
+codex_replace_mcp_config() {
   local mcp_file=$1
+  local tmp
+
+  tmp=$(mktemp "${CODEX_CONFIG}.tmp.XXXXXX") || return 1
+  awk '
+    function trim(value) {
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      return value
+    }
+    function managed_header(line) {
+      line = trim(line)
+      return line ~ /^\[mcp_servers\./ || line ~ /^\[projects\./ || line ~ /^\[notice\]/
+    }
+    /^\[/ {
+      skip = managed_header($0)
+    }
+    !skip { print }
+  ' "$CODEX_CONFIG" > "$tmp"
+
+  if [[ -s "$mcp_file" ]]; then
+    printf '\n' >> "$tmp"
+    cat "$mcp_file" >> "$tmp"
+  fi
+
+  mv "$tmp" "$CODEX_CONFIG"
+}
+
+codex_update_config_from_provider() {
+  local mcp_file=$1
+  local tmp
 
   if [[ -z "$PROVIDER_NAME" || -z "$BASE_URL" ]]; then
-    echo "错误：供应商信息不完整，无法生成 config.toml。"
+    echo "错误：供应商信息不完整，无法更新 config.toml。"
     return 1
   fi
 
-  {
-    echo "model_provider = \"${PROVIDER_NAME}\""
-    if [[ -n "$MODEL" ]]; then
-      echo "model = \"${MODEL}\""
-    fi
-    if [[ -n "$MODEL_REASONING_EFFORT" ]]; then
-      echo "model_reasoning_effort = \"${MODEL_REASONING_EFFORT}\""
-    fi
-    if [[ -n "$DISABLE_RESPONSE_STORAGE" ]]; then
-      echo "disable_response_storage = ${DISABLE_RESPONSE_STORAGE}"
-    fi
-    echo
-    echo "[model_providers.${PROVIDER_NAME}]"
-    echo "name = \"${PROVIDER_NAME}\""
-    echo "base_url = \"${BASE_URL}\""
-    echo "wire_api = \"${WIRE_API}\""
-    echo "requires_openai_auth = ${REQUIRES_OPENAI_AUTH}"
-    if [[ -s "$mcp_file" ]]; then
-      echo
-      cat "$mcp_file"
-    fi
-  } > "$CODEX_CONFIG"
+  mkdir -p "$CODEX_DIR"
+  if [ ! -f "$CODEX_CONFIG" ]; then
+    : > "$CODEX_CONFIG"
+  fi
+
+  tmp=$(mktemp "${CODEX_CONFIG}.tmp.XXXXXX") || return 1
+  awk \
+    -v provider="$PROVIDER_NAME" \
+    -v base_url="$BASE_URL" \
+    -v wire_api="$WIRE_API" \
+    -v requires_auth="$REQUIRES_OPENAI_AUTH" '
+    function trim(value) {
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      return value
+    }
+    function provider_header(line) {
+      line = trim(line)
+      return line == "[model_providers." provider "]"
+    }
+    function print_provider_block() {
+      print "[model_providers." provider "]"
+      print "name = \"" provider "\""
+      print "base_url = \"" base_url "\""
+      print "wire_api = \"" wire_api "\""
+      print "requires_openai_auth = " requires_auth
+    }
+    {
+      if (in_provider && $0 ~ /^[[:space:]]*\[/) {
+        print_provider_block()
+        provider_written = 1
+        in_provider = 0
+      }
+
+      if (!top_written && !top_seen && $0 ~ /^[[:space:]]*\[/) {
+        print "model_provider = \"" provider "\""
+        top_written = 1
+      }
+
+      if (provider_header($0)) {
+        in_provider = 1
+        next
+      }
+      if (in_provider) {
+        next
+      }
+
+      if (!top_written && $0 ~ /^[[:space:]]*model_provider[[:space:]]*=/) {
+        print "model_provider = \"" provider "\""
+        top_seen = 1
+        top_written = 1
+        next
+      }
+
+      print
+    }
+    END {
+      if (in_provider) {
+        print_provider_block()
+        provider_written = 1
+      }
+      if (!top_written) {
+        print "model_provider = \"" provider "\""
+      }
+      if (!provider_written) {
+        print ""
+        print_provider_block()
+      }
+    }
+  ' "$CODEX_CONFIG" > "$tmp"
+
+  mv "$tmp" "$CODEX_CONFIG"
+
+  if [[ -n "$mcp_file" ]]; then
+    codex_replace_mcp_config "$mcp_file"
+  fi
 }
 
 codex_import_legacy_profile() {
@@ -565,12 +649,13 @@ codex_select_mcp_set() {
   done
 
   if [ ${#choices[@]} -eq 0 ]; then
-    echo "暂无 MCP/信任配置，请先保存。"
-    pause
-    return 1
+    echo "暂无已保存的 MCP/信任配置，将保持当前配置。"
+    CODEX_SELECTED_MCP_FILE=""
+    return 0
   fi
 
   echo "可用的 MCP/信任配置："
+  echo "  0) 保持当前 MCP/信任配置（只切换供应商）"
   local idx=1
   for name in "${display[@]}"; do
     echo "  ${idx}) ${name}"
@@ -579,14 +664,18 @@ codex_select_mcp_set() {
 
   local selection
   while :; do
-    selection=$(prompt "输入要选择的配置编号（输入0返回）：")
+    selection=$(prompt "输入要选择的配置编号（输入0保持当前，输入q返回）：")
+    if [[ "$selection" == "q" || "$selection" == "Q" ]]; then
+      CODEX_SELECTED_MCP_FILE=""
+      return 1
+    fi
     if [[ ! "$selection" =~ ^[0-9]+$ ]]; then
       echo "请输入有效编号。"
       continue
     fi
     if (( selection == 0 )); then
       CODEX_SELECTED_MCP_FILE=""
-      return 1
+      return 0
     fi
     if (( selection < 1 || selection > ${#choices[@]} )); then
       echo "编号超出范围，请重试。"
@@ -697,18 +786,21 @@ switch_codex_profile() {
     return
   fi
 
-  if ! codex_write_config_from_provider "$mcp_file"; then
+  if ! codex_update_config_from_provider "$mcp_file"; then
     pause
     return
   fi
 
-  local mcp_name
-  mcp_name=$(basename "$mcp_file")
-  mcp_name=${mcp_name#${CODEX_MCP_PREFIX}}
-  mcp_name=${mcp_name%${CODEX_MCP_SUFFIX}}
-
   echo "已切换到供应商：$chosen"
-  echo "  MCP/信任配置：$mcp_name"
+  if [[ -n "$mcp_file" ]]; then
+    local mcp_name
+    mcp_name=$(basename "$mcp_file")
+    mcp_name=${mcp_name#${CODEX_MCP_PREFIX}}
+    mcp_name=${mcp_name%${CODEX_MCP_SUFFIX}}
+    echo "  MCP/信任配置：$mcp_name"
+  else
+    echo "  MCP/信任配置：保持当前"
+  fi
   pause
 }
 
@@ -1295,7 +1387,7 @@ codex_menu() {
   while true; do
     clear
     echo "== Codex 配置管理 =="
-    echo "1) 切换供应商/MCP配置"
+    echo "1) 切换供应商/可选MCP配置"
     echo "2) 删除供应商"
     echo "3) 批量更新模型/思考强度"
     echo "4) 保存 MCP/信任配置"
